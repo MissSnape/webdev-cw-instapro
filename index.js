@@ -1,4 +1,4 @@
-import { getPosts } from "./api.js";
+import { getPosts, addPost, getUserPosts} from "./api.js";
 import { renderAddPostPageComponent } from "./components/add-post-page-component.js";
 import { renderAuthPageComponent } from "./components/auth-page-component.js";
 import {
@@ -20,7 +20,7 @@ export let user = getUserFromLocalStorage();
 export let page = null;
 export let posts = [];
 
-const getToken = () => {
+export const getToken = () => {
   const token = user ? `Bearer ${user.token}` : undefined;
   return token;
 };
@@ -67,20 +67,48 @@ export const goToPage = (newPage, data) => {
     }
 
     if (newPage === USER_POSTS_PAGE) {
-      // TODO: реализовать получение постов юзера из API
+      page = LOADING_PAGE;
+      renderApp();
+      
       console.log("Открываю страницу пользователя: ", data.userId);
-      page = USER_POSTS_PAGE;
-      posts = [];
-      return renderApp();
+      return getUserPosts({token:getToken(),
+                    id:data.userId})
+      .then((newPosts) => {
+        posts =newPosts;
+        console.log(posts);
+        page = USER_POSTS_PAGE;
+        renderApp();
+
+      }
+        )
     }
 
     page = newPage;
+    flag = false;
     renderApp();
 
     return;
   }
 
   throw new Error("страницы не существует");
+};
+
+export const toggleUserLike = ({ postId }) => {
+  const index = posts.findIndex((post) => post.id === postId);
+
+  if (posts[index].isLiked) {
+    dislike({ token: getToken(), id: postId }).then((updatedPost) => {
+      posts[index].likes = updatedPost.post.likes;
+      posts[index].isLiked = false;
+      renderApp();
+    });
+  } else {
+    like({ token: getToken(), id: postId }).then((updatedPost) => {
+      posts[index].likes = updatedPost.post.likes;
+      posts[index].isLiked = true;
+      renderApp();
+    });
+  }
 };
 
 const renderApp = () => {
@@ -111,22 +139,33 @@ const renderApp = () => {
       appEl,
       onAddPostClick({ description, imageUrl }) {
         // TODO: реализовать добавление поста в API
+        addPost({ description, imageUrl, token: getToken() })
+        .then(()=>{
+          goToPage(POSTS_PAGE);
+        })
         console.log("Добавляю пост...", { description, imageUrl });
-        goToPage(POSTS_PAGE);
+
+        
       },
     });
   }
 
   if (page === POSTS_PAGE) {
+    console.log('вызов функции renderPostsPageComponent');
     return renderPostsPageComponent({
       appEl,
     });
   }
 
   if (page === USER_POSTS_PAGE) {
-    // TODO: реализовать страницу фотографию пользвателя
-    appEl.innerHTML = "Здесь будет страница фотографий пользователя";
-    return;
+    return renderPostsPageComponent({
+      appEl,
+      user,
+      goToPage,
+      posts,
+      page: true,
+      toggleLike: toggleUserLike
+    })
   }
 };
 
